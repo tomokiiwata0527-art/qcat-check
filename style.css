@@ -1,0 +1,87 @@
+:root{--navy:#1f3a5f;--bg:#f3f5f8;--card:#fff;--line:#d8dee8;--ok:#1a7f37;--warn:#b26a00;--ng:#c62828;--txt:#1b2430;--sub:#5b6676}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.5 -apple-system,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif}
+textarea{font-size:16px}
+body{padding-bottom:76px;max-width:760px;margin:0 auto}
+header#top{background:var(--navy);color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+.brand{font-weight:700}
+.who{font-size:12px;opacity:.85}
+.banner{background:#fff4e0;color:#7a4a00;border-bottom:1px solid #f0d49a;padding:8px 16px;font-size:13px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:12px 16px;padding:14px}
+h2{font-size:17px;margin:0 0 10px}
+label{display:block;font-size:13px;color:var(--sub);margin:8px 0}
+input,select{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:16px;background:#fff;color:var(--txt)}
+input[type=range]{padding:0}
+input[type=file]{padding:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+.row.end{align-items:flex-end;margin:0}
+button,.btn{display:inline-block;padding:11px 16px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:15px;color:var(--txt);cursor:pointer;text-align:center}
+button.primary,.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy);font-weight:600}
+button:disabled{opacity:.4;cursor:default}
+.hint{font-size:13px;color:var(--sub);margin:6px 0}
+.note{font-size:14px;padding:8px 10px;border-radius:8px;background:#fff4e0;color:#7a4a00}
+.err{color:var(--ng);font-size:14px;margin:4px 0}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+.logoPrev{max-height:48px;max-width:160px;border:1px solid var(--line);border-radius:4px}
+.pickerBox{position:relative;touch-action:none}
+#picker{width:100%;display:block;border-radius:8px;touch-action:none;background:#000}
+#loupe{position:absolute;top:8px;left:8px;width:120px;height:120px;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #000,0 2px 8px rgba(0,0,0,.5);pointer-events:none}
+.twoImg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.twoImg figure{margin:0}
+.twoImg canvas{width:100%;display:block;border:1px solid var(--line);border-radius:6px}
+figcaption{font-size:11px;color:var(--sub);text-align:center}
+.resBadge{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;margin-bottom:8px}
+.resBadge .pct{font-size:40px;font-weight:800}
+.badge{display:inline-block;white-space:nowrap;padding:3px 12px;border-radius:999px;font-weight:700;font-size:15px;color:#fff}
+.badge.pass{background:var(--ok)}.badge.caution{background:var(--warn)}.badge.fail{background:var(--ng)}
+.finalBox{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.finalLbl{font-size:13px;color:var(--sub);font-weight:600}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.seg button{padding:14px;font-size:18px;font-weight:700}
+.seg button.on[data-v=pass]{background:var(--ok);color:#fff;border-color:var(--ok)}
+.seg button.on[data-v=fail]{background:var(--ng);color:#fff;border-color:var(--ng)}
+nav#tabs{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);max-width:760px;margin:0 auto;z-index:20}
+nav#tabs button{flex:1;border:0;border-radius:0;padding:16px 0;background:#fff;font-weight:600;color:var(--sub)}
+nav#tabs button.on{color:var(--navy);box-shadow:inset 0 3px 0 var(--navy)}
+.dlg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px}
+.dlgBox{background:#fff;border-radius:12px;padding:16px;width:100%;max-width:420px}
+.dlgBox textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;z-index:50;max-width:90%}
+
+/* ===== 帳票（A4横）。画面では縮小して全体を表示、印刷では実寸 ===== */
+#paperWrap{margin:12px 16px;overflow:hidden}
+.paper{width:277mm;background:#fff;color:#111;border:1px solid #bbb;padding:0;transform-origin:0 0;font-size:10pt;line-height:1.45}
+.ph{display:flex;justify-content:space-between;align-items:flex-start;gap:8mm;margin-bottom:3mm}
+.phl{display:flex;gap:4mm;align-items:flex-start;min-width:0}
+.logo{flex:none;width:28mm;height:15mm;border:1px dashed #999;color:#666;font-size:9pt;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.logo img{max-width:100%;max-height:100%;display:block}
+.ttl{font-size:15pt;font-weight:700;line-height:1.3}
+.phi div{font-size:10pt}
+.ok{color:#1a7f37;font-weight:700}.ng{color:#c62828;font-weight:700}.wn{color:#b26a00;font-weight:700}.gr{color:#555;font-weight:700}
+table.sign{flex:none;border-collapse:collapse;width:100mm;font-size:9pt}
+table.sign th{background:#e8eef6;border:1px solid #666;font-weight:500;padding:0 2mm;width:33.3%}
+table.sign td{border:1px solid #666;height:17mm}
+table.sheet{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9.5pt}
+table.sheet th{background:#e8eef6;border:1px solid #999;padding:1.5mm 1mm;font-weight:700;text-align:center}
+table.sheet td{border:1px solid #999;padding:1mm;text-align:center;vertical-align:middle;height:33mm;word-break:break-all}
+table.sheet td.pct{font-size:13pt;font-weight:700}
+table.sheet td.rm{text-align:left;font-size:8.5pt}
+table.sheet td img{max-width:100%;max-height:30mm;display:block;margin:0 auto}
+table.sheet tr{break-inside:avoid}
+table.sheet thead{display:table-header-group}
+.foot{font-size:8.5pt;margin-top:2mm;line-height:1.5}
+.emptyRow{padding:10mm;text-align:center;color:#666;border:1px solid #999;border-top:0}
+#rowActions h3{font-size:15px;margin:0 0 8px}
+.ra{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+.ra small{color:var(--sub)}
+
+@page{size:A4 landscape;margin:10mm}
+@media print{
+  header#top,nav#tabs,.banner,.noprint,#toast,.dlg{display:none!important}
+  html,body{background:#fff!important;padding:0!important;max-width:none!important;font-size:10pt}
+  #tab-measure,#tab-settings,#login{display:none!important}
+  #paperWrap{margin:0!important;height:auto!important;overflow:visible!important}
+  .paper{transform:none!important;width:auto!important;border:0!important}
+}

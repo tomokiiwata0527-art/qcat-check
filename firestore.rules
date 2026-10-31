@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // 管理者名簿：本人の有無確認のみ可。登録・変更はFirebaseコンソールからのみ。
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /measurements/{id} {
+      allow read: if signedIn();
+      // 新規記録は「確認待ち」でのみ作成可。本人のuidを記録させる。
+      allow create: if signedIn()
+                    && request.resource.data.createdBy == request.auth.uid
+                    && request.resource.data.status == 'pending';
+      // 更新は管理者のみ、確認に関する項目だけ。算定値・座標は書き換え不可。
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'reviewComment', 'reviewedBy', 'reviewedAt']);
+      allow delete: if false;   // 品質記録は削除不可
+    }
+  }
+}

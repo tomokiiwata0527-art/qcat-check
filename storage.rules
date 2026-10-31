@@ -1,0 +1,13 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /measurements/{id}/{file} {
+      allow read: if request.auth != null;
+      // 画像の新規作成のみ（上書き・削除は不可）
+      allow create: if request.auth != null
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+  }
+}

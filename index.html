@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f3a5f">
+<title>Q-CAT 充填率チェック</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand">Q-CAT 接着剤充填率チェック</div>
+  <div id="who" class="who"></div>
+</header>
+<div id="banner" class="banner" hidden></div>
+
+<!-- ログイン（Firebaseモードのみ） -->
+<section id="login" class="panel" hidden>
+  <h2>ログイン</h2>
+  <label>メールアドレス<input id="loginEmail" type="email" autocomplete="username"></label>
+  <label>パスワード<input id="loginPw" type="password" autocomplete="current-password"></label>
+  <button id="loginBtn" class="primary">ログイン</button>
+  <p id="loginErr" class="err"></p>
+</section>
+
+<main id="app" hidden>
+  <!-- ================= 測定 ================= -->
+  <section id="tab-measure" class="tab">
+    <div class="panel">
+      <h2>1. 検査情報</h2>
+      <div class="grid2">
+        <label>施工日<input id="fDate" type="date"></label>
+        <label>時間帯
+          <select id="fSession"><option value="AM">午前</option><option value="PM">午後</option></select>
+        </label>
+      </div>
+      <div class="grid2">
+        <label>張り手（班・職人名）<input id="fCrew" placeholder="例：A班"></label>
+        <label>検査者<input id="fMeasurer"></label>
+      </div>
+      <label>施工箇所（面・階・通り）<input id="fLocation" placeholder="例：南面 3F 5-6通り"></label>
+      <div class="grid2">
+        <label>タイル<input id="fTile" placeholder="例：45二丁"></label>
+        <label>接着剤ロット<input id="fLot"></label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>2. 写真と四隅の指定</h2>
+      <p class="hint">剥がしたタイル裏面を<b>真上から</b>、全体が入るように撮影します。撮影後、<b>短辺側の 左上→右上→右下→左下</b> の順に四隅をタップします。ドラッグで微調整できます。</p>
+      <div class="row">
+        <label class="btn primary" for="fFile">写真を撮影 / 選択</label>
+        <input id="fFile" type="file" accept="image/*" capture="environment" hidden>
+        <label class="btn" for="fFile2">ギャラリーから選択</label>
+        <input id="fFile2" type="file" accept="image/*" hidden>
+      </div>
+      <div id="pickerWrap" hidden>
+        <div class="pickerBox">
+          <canvas id="picker"></canvas>
+          <canvas id="loupe" width="120" height="120" hidden></canvas>
+        </div>
+        <p id="pickMsg" class="hint"></p>
+        <div class="row">
+          <button id="resetPts">四隅をやり直す</button>
+          <button id="runBtn" class="primary" disabled>算定する</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="resultPanel" class="panel" hidden>
+      <h2>3. 算定結果と最終判定</h2>
+      <div id="resBadge" class="resBadge"></div>
+      <div class="twoImg">
+        <figure><canvas id="cvWarp"></canvas><figcaption>補正後（<span id="tileSz"></span>）</figcaption></figure>
+        <figure><canvas id="cvOv"></canvas><figcaption>青＝接着剤あり／赤＝なし／色なしの外周は除外</figcaption></figure>
+      </div>
+      <label>検出の感度（赤の出方を調整。<span id="sensVal">0</span>）
+        <input id="sens" type="range" min="-30" max="30" step="1" value="0">
+      </label>
+      <p class="hint">赤い部分が実際の「接着剤なし」と合っているか、写真と見比べて確認してください。ずれている場合は四隅をやり直すか、感度を調整します。</p>
+      <p id="resNote" class="note" hidden></p>
+      <div class="finalBox">
+        <div class="finalLbl">最終判定（検査者が写真を確認して確定）</div>
+        <div class="seg">
+          <button id="finPass" data-v="pass">合格</button>
+          <button id="finFail" data-v="fail">不合格</button>
+        </div>
+        <label>備考（自動判定と異なる場合・要確認の場合は理由が必須）<input id="fRemarks" placeholder="例：影の影響で赤が過大。目視で合格"></label>
+      </div>
+      <button id="saveBtn" class="primary">この結果を保存</button>
+    </div>
+  </section>
+
+  <!-- ================= 日報 ================= -->
+  <section id="tab-report" class="tab" hidden>
+    <div class="panel noprint">
+      <div class="grid2">
+        <label>施工日<input id="rDate" type="date"></label>
+        <div class="row end"><button id="rReload">更新</button><button id="rPrint" class="primary">印刷 / PDF</button></div>
+      </div>
+      <details>
+        <summary>期間を指定してExcel出力</summary>
+        <div class="grid2">
+          <label>開始日<input id="xFrom" type="date"></label>
+          <label>終了日<input id="xTo" type="date"></label>
+        </div>
+        <button id="xBtn">Excelを出力</button>
+      </details>
+    </div>
+    <div id="paperWrap"><div id="paper" class="paper"></div></div>
+    <div id="rowActions" class="panel noprint" hidden></div>
+  </section>
+
+  <!-- ================= 設定 ================= -->
+  <section id="tab-settings" class="tab" hidden>
+    <div class="panel">
+      <h2>帳票の見出し</h2>
+      <label>会社名・工事所名<input id="sCompany" placeholder="例：○○建設 △△工事所"></label>
+      <label>工事名<input id="sSite" placeholder="例：京王多摩川開発 B棟 外装タイル工事"></label>
+      <label>ロゴ画像（任意）<input id="sLogo" type="file" accept="image/*"></label>
+      <div class="row"><img id="logoPrev" class="logoPrev" alt="" hidden><button id="logoClear" hidden>ロゴを消す</button></div>
+      <label>帳票の注記に追記（任意）<input id="sFootNote" placeholder="例：（本資料はサンプルです）"></label>
+    </div>
+    <div class="panel">
+      <h2>判定の設定</h2>
+      <div class="grid2">
+        <label>タイル 幅(mm)<input id="sTileW" type="number" min="10"></label>
+        <label>タイル 高さ(mm)<input id="sTileH" type="number" min="10"></label>
+      </div>
+      <div class="grid2">
+        <label>合格基準 (%以上)<input id="sPass" type="number" step="0.5"></label>
+        <label>「要確認」の上限 (%)<input id="sCaution" type="number" step="0.5"></label>
+      </div>
+      <label>外周の除外幅 (短辺に対する%)<input id="sMargin" type="number" step="0.5" min="0" max="20"></label>
+      <p class="hint">自動判定は、基準未満＝不合格／基準〜上限＝要確認／上限以上＝合格です。要確認の場合は検査者が最終判定を選びます。外周の除外幅は、Q-CATの要領書の充填率の定義に合わせて決めてください。設定値は各記録に保存され、過去の記録は変わりません。</p>
+      <button id="sSave" class="primary">設定を保存</button>
+      <hr>
+      <div id="modeInfo" class="hint"></div>
+      <button id="logoutBtn" hidden>ログアウト</button>
+    </div>
+  </section>
+</main>
+
+<nav id="tabs" hidden>
+  <button data-tab="measure" class="on">測定</button>
+  <button data-tab="report">日報</button>
+  <button data-tab="settings">設定</button>
+</nav>
+<div id="dlg" class="dlg" hidden>
+  <div class="dlgBox">
+    <h2 id="dlgTitle"></h2>
+    <textarea id="dlgText" rows="3" placeholder="理由"></textarea>
+    <p id="dlgErr" class="err"></p>
+    <div class="row"><button id="dlgCancel">キャンセル</button><button id="dlgOk" class="primary">確定</button></div>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
