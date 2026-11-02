@@ -42,9 +42,15 @@
       </div>
       <label>施工箇所（面・階・通り）<input id="fLocation" placeholder="例：南面 3F 5-6通り"></label>
       <div class="grid2">
-        <label>タイル<input id="fTile" placeholder="例：45二丁"></label>
+        <label>タイル（品名）<input id="fTile" placeholder="例：45二丁"></label>
         <label>接着剤ロット<input id="fLot"></label>
       </div>
+      <label>タイル寸法のプリセット<select id="fPreset"></select></label>
+      <div class="grid2">
+        <label>タイル 幅(mm)<input id="fTileW" type="number" min="10" step="0.1" inputmode="decimal"></label>
+        <label>タイル 高さ(mm)<input id="fTileH" type="number" min="10" step="0.1" inputmode="decimal"></label>
+      </div>
+      <p class="hint">幅＝短辺、高さ＝長辺。四隅は短辺側から指定します。</p>
     </div>
 
     <div class="panel">
@@ -126,9 +132,13 @@
     <div class="panel">
       <h2>判定の設定</h2>
       <div class="grid2">
-        <label>タイル 幅(mm)<input id="sTileW" type="number" min="10"></label>
-        <label>タイル 高さ(mm)<input id="sTileH" type="number" min="10"></label>
+        <label>タイル 幅(mm)の初期値<input id="sTileW" type="number" min="10" step="0.1"></label>
+        <label>タイル 高さ(mm)の初期値<input id="sTileH" type="number" min="10" step="0.1"></label>
       </div>
+      <label>タイル寸法のプリセット（1行1件：名称,幅,高さ）
+        <textarea id="sPresets" rows="6" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit" placeholder="例：&#10;二丁掛,60,227&#10;45二丁,45,95"></textarea>
+      </label>
+      <p class="hint">測定画面で寸法を選べます。寸法は記録ごとに保存され、過去の記録は変わりません。</p>
       <div class="grid2">
         <label>合格基準 (%以上)<input id="sPass" type="number" step="0.5"></label>
         <label>「要確認」の上限 (%)<input id="sCaution" type="number" step="0.5"></label>
