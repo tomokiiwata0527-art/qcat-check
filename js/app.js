@@ -15,7 +15,8 @@ const hhmm = iso => { const d = new Date(iso); return `${pad(d.getHours())}:${pa
 const dateJp = ymd => { const d = new Date(ymd + 'T00:00:00'); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`; };
 const toBlob = (cv, type, q) => new Promise(r => cv.toBlob(r, type, q));
 
-const settings = { company: '', site: '', logo: '', footNote: '', tileW: 98, tileH: 264, pass: 60, caution: 65, margin: 7, ...LS.get('qcat.settings', {}) };
+const DEFAULT_PRESETS = ['二丁掛,60,227', '小口平,60,108', 'ボーダータイル(30),30,227', 'ボーダータイル(40),40,227', '45二丁,45,95', '50角,45,45'].join('\n');
+const settings = { company: '', site: '', logo: '', footNote: '', tileW: 100, tileH: 260, pass: 60, caution: 65, margin: 7, ...LS.get('qcat.settings', {}) };
 const store = createStore();
 const S = { img: null, photo: null, photoBlob: null, pts: [], res: null, final: null, saving: false };
 
@@ -80,21 +81,45 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
 });
 
 // ================= 測定 =================
-const FIELDS = ['fCrew', 'fLocation', 'fTile', 'fLot', 'fMeasurer'];
+const FIELDS = ['fCrew', 'fLocation', 'fTile', 'fLot', 'fMeasurer', 'fTileW', 'fTileH'];
+function parsePresets(txt) {
+  return (txt || '').split('\n').map(l => l.split(/[,、，\t]/).map(s => s.trim())).filter(a => a.length >= 3 && +a[1] > 0 && +a[2] > 0)
+    .map(a => ({ name: a[0], w: +a[1], h: +a[2] }));
+}
+function fillPresets() {
+  const list = [{ name: `かまぼこ（${settings.tileW}×${settings.tileH}mm）`, w: settings.tileW, h: settings.tileH }, ...parsePresets(settings.presets ?? DEFAULT_PRESETS)];
+  $('fPreset').innerHTML = list.map((p, i) => `<option value="${i}">${esc(p.name)}${i ? `（${p.w}×${p.h}mm）` : ''}</option>`).join('') + '<option value="x">その他（直接入力）</option>';
+  $('fPreset')._list = list;
+  syncPreset();
+}
+function syncPreset() {
+  const w = +$('fTileW').value, h = +$('fTileH').value, l = $('fPreset')._list || [];
+  const i = l.findIndex(p => p.w === w && p.h === h);
+  $('fPreset').value = i >= 0 ? String(i) : 'x';
+}
+$('fPreset').onchange = () => {
+  const p = ($('fPreset')._list || [])[+$('fPreset').value];
+  if (p) { $('fTileW').value = p.w; $('fTileH').value = p.h; $('fTileW').dispatchEvent(new Event('change')); }
+};
+['fTileW', 'fTileH'].forEach(id => $(id).addEventListener('change', () => {
+  syncPreset(); updatePickUI();
+  if (S.img && S.pts.length === 4 && !$('resultPanel').hidden) runAnalysis();
+}));
 function initForm() {
   $('fDate').value = today();
   $('fSession').value = new Date().getHours() < 12 ? 'AM' : 'PM';
   const saved = LS.get('qcat.form', {});
   FIELDS.forEach(f => { $(f).value = saved[f] || ''; });
+  if (!(+$('fTileW').value > 0 && +$('fTileH').value > 0)) { $('fTileW').value = settings.tileW; $('fTileH').value = settings.tileH; }
   $('rDate').value = today();
   $('xTo').value = today(); $('xFrom').value = today().slice(0, 8) + '01';
-  fillSettings();
+  fillSettings(); fillPresets();
 }
 const rememberForm = () => LS.set('qcat.form', Object.fromEntries(FIELDS.map(f => [f, $(f).value])));
 FIELDS.forEach(f => $(f).addEventListener('change', rememberForm));
 
 const optsNow = () => ({
-  tileW: settings.tileW, tileH: settings.tileH, marginPct: settings.margin,
+  tileW: +$('fTileW').value || settings.tileW, tileH: +$('fTileH').value || settings.tileH, marginPct: settings.margin,
   thresholdPass: settings.pass, thresholdCaution: settings.caution, sensitivity: +$('sens').value,
 });
 
@@ -153,8 +178,9 @@ function geometryWarning() {
   const cs = [cross(a, b, c), cross(b, c, d), cross(c, d, a), cross(d, a, b)];
   if (!(cs.every(v => v > 0) || cs.every(v => v < 0))) return '四隅の順番が違うか、交差しています。①左上→②右上→③右下→④左下の順に指定し直してください。';
   const ratio = ((dist(a, b) + dist(d, c)) / 2) / ((dist(a, d) + dist(b, c)) / 2);
-  const exp = settings.tileW / settings.tileH;
-  if (ratio > exp * 1.35 || ratio < exp * 0.7) return `指定範囲の縦横比が規格(${settings.tileW}×${settings.tileH}mm)と大きく異なります。短辺側から指定しているか、斜めから撮影していないか、タイルが欠けていないかを確認してください（このまま算定も可能ですが精度は落ちます）。`;
+  const tw = +$('fTileW').value || settings.tileW, th = +$('fTileH').value || settings.tileH;
+  const exp = tw / th;
+  if (ratio > exp * 1.35 || ratio < exp * 0.7) return `指定範囲の縦横比が規格(${tw}×${th}mm)と大きく異なります。短辺側から指定しているか、斜めから撮影していないか、タイルが欠けていないかを確認してください（このまま算定も可能ですが精度は落ちます）。`;
   return '';
 }
 function updatePickUI() {
@@ -441,7 +467,7 @@ function showLogo() {
 }
 function fillSettings() {
   $('sCompany').value = settings.company; $('sSite').value = settings.site; $('sFootNote').value = settings.footNote;
-  $('sTileW').value = settings.tileW; $('sTileH').value = settings.tileH;
+  $('sTileW').value = settings.tileW; $('sTileH').value = settings.tileH; $('sPresets').value = settings.presets ?? DEFAULT_PRESETS;
   $('sPass').value = settings.pass; $('sCaution').value = settings.caution; $('sMargin').value = settings.margin;
   showLogo();
 }
@@ -458,11 +484,11 @@ $('logoClear').onclick = () => { settings.logo = ''; LS.set('qcat.settings', set
 $('sSave').onclick = () => {
   const v = {
     company: $('sCompany').value.trim(), site: $('sSite').value.trim(), footNote: $('sFootNote').value.trim(),
-    tileW: +$('sTileW').value, tileH: +$('sTileH').value,
+    tileW: +$('sTileW').value, tileH: +$('sTileH').value, presets: $('sPresets').value.trim(),
     pass: +$('sPass').value, caution: +$('sCaution').value, margin: +$('sMargin').value,
   };
   if (!(v.tileW > 0 && v.tileH > 0) || v.pass < 0 || v.caution < v.pass || v.margin < 0 || v.margin > 20) { toast('設定値を確認してください'); return; }
-  Object.assign(settings, v); LS.set('qcat.settings', settings); toast('設定を保存しました');
+  Object.assign(settings, v); LS.set('qcat.settings', settings); fillPresets(); toast('設定を保存しました');
 };
 
 boot();
