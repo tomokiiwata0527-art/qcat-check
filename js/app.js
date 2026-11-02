@@ -15,6 +15,7 @@ const hhmm = iso => { const d = new Date(iso); return `${pad(d.getHours())}:${pa
 const dateJp = ymd => { const d = new Date(ymd + 'T00:00:00'); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`; };
 const toBlob = (cv, type, q) => new Promise(r => cv.toBlob(r, type, q));
 
+const APP_VERSION = '0.2.2';
 const DEFAULT_PRESETS = ['二丁掛,60,227', '小口平,60,108', 'ボーダータイル(30),30,227', 'ボーダータイル(40),40,227', '45二丁,45,95', '50角,45,45'].join('\n');
 const settings = { company: '', site: '', logo: '', footNote: '', tileW: 100, tileH: 260, pass: 60, caution: 65, margin: 7, ...LS.get('qcat.settings', {}) };
 const store = createStore();
@@ -61,7 +62,7 @@ function enter() {
     $('banner').hidden = false; $('banner').textContent += '　【試用版】印刷/PDFとExcel出力は配布版で使えます。';
   }
   $('modeInfo').textContent = store.mode === 'firebase'
-    ? `保存先：Firebase（共有）／ログイン中：${u.email}／権限：${u.isAdmin ? '管理者（無効化可）' : '一般（検査・閲覧）'}`
+    ? `保存先：Firebase（共有）／ログイン中：${u.email}／権限：${u.isAdmin ? '管理者（無効化可）' : '一般（検査・閲覧）'}／版 ${APP_VERSION}`
     : '保存先：この端末のブラウザ内（共有なし）。ブラウザのデータを消去すると記録も失われます。';
   initForm();
 }
@@ -313,7 +314,7 @@ $('saveBtn').onclick = async () => {
       imageSize: [S.img.width, S.img.height],
       tileW: o.tileW, tileH: o.tileH, marginPct: o.marginPct, sensitivity: o.sensitivity,
       autoThreshold: r.autoThreshold, thresholdPass: o.thresholdPass, thresholdCaution: o.thresholdCaution,
-      status: 'pending', createdAt: new Date().toISOString(), appVersion: '0.2.0',
+      status: 'pending', createdAt: new Date().toISOString(), appVersion: APP_VERSION,
     };
     const imgs = { photo: S.photoBlob, shot: await makeShot(), overlay: await toBlob($('cvOv'), 'image/jpeg', 0.88) };
     await Promise.race([store.save(rec, imgs), new Promise((_, rej) => setTimeout(() => rej({ code: 'timeout' }), 60000))]);
@@ -327,7 +328,7 @@ $('saveBtn').onclick = async () => {
   } catch (e) {
     const c = e.code || e.message || '';
     const hint = /storage\/(unauthorized|retry-limit|unknown|bucket)|timeout/.test(c) ? '（写真の送信に失敗。Storageの設定・ルールを確認してください）' : /permission-denied/.test(c) ? '（Firestoreのルール未公開の可能性）' : '';
-    toast('保存に失敗しました：' + c + hint, 8000);
+    toast('保存に失敗しました：' + c + hint + `（v${APP_VERSION}）`, 10000);
   } finally {
     S.saving = false; $('saveBtn').disabled = false; $('saveBtn').textContent = 'この結果を保存';
   }

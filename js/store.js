@@ -113,13 +113,11 @@ class FirebaseStore {
     const { doc, setDoc, writeBatch } = this.m;
     rec.createdBy = this.user.uid; rec.createdByEmail = this.user.email;
     rec.imgMode = 'fs';
-    const data = {
-      photo: await shrinkToDataUrl(imgs.photo, 1280),
-      shot: await shrinkToDataUrl(imgs.shot, 900),
-      overlay: await shrinkToDataUrl(imgs.overlay, 1056),
-    };
-    for (const k of ['photo', 'shot', 'overlay']) await setDoc(doc(this.fs, 'measurements', rec.id, 'images', k), { data: data[k] });
-    await setDoc(doc(this.fs, 'measurements', rec.id), JSON.parse(JSON.stringify(rec)));   // undefinedを除去
+    const step = async (name, fn) => { try { return await fn(); } catch (e) { e.code = (e.code || 'error') + '@' + name; e.message = name + ': ' + (e.message || ''); throw e; } };
+    const data = {};
+    for (const [k, mx] of [['photo', 1280], ['shot', 900], ['overlay', 1056]]) data[k] = await step('縮小:' + k, () => shrinkToDataUrl(imgs[k], mx));
+    for (const k of ['photo', 'shot', 'overlay']) await step('画像:' + k + '(' + data[k].length + ')', () => setDoc(doc(this.fs, 'measurements', rec.id, 'images', k), { data: data[k] }));
+    await step('記録', () => setDoc(doc(this.fs, 'measurements', rec.id), JSON.parse(JSON.stringify(rec))));   // undefinedを除去
     this.urls.set(rec.id + '/photo', data.photo); this.urls.set(rec.id + '/shot', data.shot); this.urls.set(rec.id + '/overlay', data.overlay);
     return rec;
   }
