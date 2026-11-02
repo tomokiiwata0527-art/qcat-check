@@ -50,6 +50,21 @@ nav#tabs button.on{color:var(--navy);box-shadow:inset 0 3px 0 var(--navy)}
 .dlgBox textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;z-index:50;max-width:90%}
 
+/* ===== 日報カレンダー ===== */
+.cal{margin-bottom:10px}
+.calHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.calHead b{font-size:16px}
+.calHead button{width:44px;padding:6px 0;font-size:20px;line-height:1}
+.calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.calW{font-size:12px;color:var(--sub);padding:2px 0}
+.calW.sun,.calD.sun .n{color:#c62828}.calW.sat,.calD.sat .n{color:#1565c0}
+.calD{border:0;background:transparent;padding:2px 0 4px;border-radius:8px;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:46px}
+.calD .n{width:32px;height:32px;line-height:32px;border-radius:50%;font-size:15px;font-weight:600;color:var(--txt)}
+.calD.today .n{box-shadow:inset 0 0 0 2px var(--navy)}
+.calD.sel .n{background:var(--navy);color:#fff!important}
+.calD .dot{width:7px;height:7px;border-radius:50%;background:transparent}
+.calD .dot.on{background:var(--navy)}.calD .dot.ng{background:var(--ng)}
+
 /* ===== 帳票（A4横）。画面では縮小して全体を表示、印刷では実寸 ===== */
 #paperWrap{margin:12px 16px;overflow:hidden}
 .paper{width:277mm;background:#fff;color:#111;border:1px solid #bbb;padding:0;transform-origin:0 0;font-size:10pt;line-height:1.45}
@@ -79,7 +94,7 @@ table.sheet thead{display:table-header-group}
 
 @page{size:A4 landscape;margin:10mm}
 @media print{
-  header#top,nav#tabs,.banner,.noprint,#toast,.dlg{display:none!important}
+  header#top,nav#tabs,.banner,.noprint,.cal,#toast,.dlg{display:none!important}
   html,body{background:#fff!important;padding:0!important;max-width:none!important;font-size:10pt}
   #tab-measure,#tab-settings,#login{display:none!important}
   #paperWrap{margin:0!important;height:auto!important;overflow:visible!important}
