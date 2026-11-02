@@ -61,6 +61,7 @@ nav#tabs button.on{color:var(--navy);box-shadow:inset 0 3px 0 var(--navy)}
 .calD{border:0;background:transparent;padding:2px 0 4px;border-radius:8px;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:46px}
 .calD .n{width:32px;height:32px;line-height:32px;border-radius:50%;font-size:15px;font-weight:600;color:var(--txt)}
 .calD.today .n{box-shadow:inset 0 0 0 2px var(--navy)}
+.calD.mid{background:#e8eef6}
 .calD.sel .n{background:var(--navy);color:#fff!important}
 .calD .dot{width:7px;height:7px;border-radius:50%;background:transparent}
 .calD .dot.on{background:var(--navy)}.calD .dot.ng{background:var(--ng)}
@@ -78,11 +79,11 @@ nav#tabs button.on{color:var(--navy);box-shadow:inset 0 3px 0 var(--navy)}
 table.sign{flex:none;border-collapse:collapse;width:100mm;font-size:9pt}
 table.sign th{background:#e8eef6;border:1px solid #666;font-weight:500;padding:0 2mm;width:33.3%}
 table.sign td{border:1px solid #666;height:17mm}
-table.sheet{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9.5pt}
-table.sheet th{background:#e8eef6;border:1px solid #999;padding:1.5mm 1mm;font-weight:700;text-align:center}
+table.sheet{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt}
+table.sheet th{background:#e8eef6;border:1px solid #999;padding:1.5mm .5mm;font-weight:700;text-align:center;font-size:8pt}
 table.sheet td{border:1px solid #999;padding:1mm;text-align:center;vertical-align:middle;height:33mm;word-break:break-all}
-table.sheet td.pct{font-size:13pt;font-weight:700}
-table.sheet td.rm{text-align:left;font-size:8.5pt}
+table.sheet td.pct{font-size:11pt;font-weight:700}
+table.sheet td.rm{text-align:left;font-size:8pt}
 table.sheet td img{max-width:100%;max-height:30mm;display:block;margin:0 auto}
 table.sheet tr{break-inside:avoid}
 table.sheet thead{display:table-header-group}
@@ -91,6 +92,9 @@ table.sheet thead{display:table-header-group}
 #rowActions h3{font-size:15px;margin:0 0 8px}
 .ra{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:14px}
 .ra small{color:var(--sub)}
+.raBtns{display:flex;gap:6px;flex:none}
+.raBtns button{padding:8px 10px;font-size:13px}
+button.danger{color:var(--ng);border-color:var(--ng)}
 
 @page{size:A4 landscape;margin:10mm}
 @media print{

@@ -37,9 +37,10 @@
         </label>
       </div>
       <div class="grid2">
-        <label>張り手（班・職人名）<input id="fCrew" placeholder="例：A班"></label>
-        <label>検査者<input id="fMeasurer"></label>
+        <label>施工会社<input id="fContractor" placeholder="例：○○タイル工業"></label>
+        <label>施工者（班・職人名）<input id="fCrew" placeholder="例：A班"></label>
       </div>
+      <label>検査者<input id="fMeasurer"></label>
       <label>施工箇所（面・階・通り）<input id="fLocation" placeholder="例：南面 3F 5-6通り"></label>
       <div class="grid2">
         <label>タイル（品名）<input id="fTile" placeholder="例：45二丁"></label>
@@ -63,6 +64,8 @@
         <input id="fFile2" type="file" accept="image/*" hidden>
       </div>
       <div id="pickerWrap" hidden>
+        <label>撮影日時（写真から自動取得。違う場合は修正）<input id="fShotAt" type="datetime-local"></label>
+        <p id="shotMsg" class="hint"></p>
         <div class="pickerBox">
           <canvas id="picker"></canvas>
           <canvas id="loupe" width="120" height="120" hidden></canvas>
@@ -104,17 +107,11 @@
     <div class="panel noprint">
       <div id="cal" class="cal"></div>
       <div class="grid2">
-        <label>施工日<input id="rDate" type="date"></label>
-        <div class="row end"><button id="rReload">更新</button><button id="rPrint" class="primary">印刷 / PDF</button></div>
+        <label>開始日<input id="rFrom" type="date"></label>
+        <label>終了日<input id="rTo" type="date"></label>
       </div>
-      <details>
-        <summary>期間を指定してExcel出力</summary>
-        <div class="grid2">
-          <label>開始日<input id="xFrom" type="date"></label>
-          <label>終了日<input id="xTo" type="date"></label>
-        </div>
-        <button id="xBtn">Excelを出力</button>
-      </details>
+      <div class="row"><button id="rToday">今日</button><button id="rMonth">今月</button><button id="rReload">更新</button><button id="rPrint" class="primary">印刷 / PDF</button></div>
+      <p class="hint">カレンダーは、1回目のタップで開始日、2回目のタップで終了日を指定できます（1日だけならタップ1回）。</p>
     </div>
     <div id="paperWrap"><div id="paper" class="paper"></div></div>
     <div id="rowActions" class="panel noprint" hidden></div>
