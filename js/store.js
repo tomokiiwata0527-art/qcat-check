@@ -77,6 +77,7 @@ class FirebaseStore {
     this.auth = this.m.getAuth(this.app);
     this.fs = this.m.getFirestore(this.app);
     this.st = this.m.getStorage(this.app);
+    this.st.maxUploadRetryTime = 20000; this.st.maxOperationRetryTime = 20000;
     await new Promise(res => {
       const off = this.m.onAuthStateChanged(this.auth, async u => { await this._setUser(u); off(); res(); });
     });
