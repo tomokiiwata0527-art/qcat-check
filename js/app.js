@@ -15,7 +15,7 @@ const hhmm = iso => { const d = new Date(iso); return `${pad(d.getHours())}:${pa
 const dateJp = ymd => { const d = new Date(ymd + 'T00:00:00'); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`; };
 const toBlob = (cv, type, q) => new Promise(r => cv.toBlob(r, type, q));
 
-const APP_VERSION = '0.2.2';
+const APP_VERSION = '0.3.0';
 const DEFAULT_PRESETS = ['二丁掛,60,227', '小口平,60,108', 'ボーダータイル(30),30,227', 'ボーダータイル(40),40,227', '45二丁,45,95', '50角,45,45'].join('\n');
 const settings = { company: '', site: '', logo: '', footNote: '', tileW: 100, tileH: 260, pass: 60, caution: 65, margin: 7, ...LS.get('qcat.settings', {}) };
 const store = createStore();
@@ -58,7 +58,7 @@ function enter() {
   }
   $('logoutBtn').hidden = store.mode !== 'firebase';
   if (window.QCAT_TRIAL) {   // 公開試用版：印刷・ファイル保存が使えない環境のため非表示
-    $('rPrint').hidden = true; document.querySelector('#tab-report details').hidden = true;
+    $('rPrint').hidden = true;
     $('banner').hidden = false; $('banner').textContent += '　【試用版】印刷/PDFとExcel出力は配布版で使えます。';
   }
   $('modeInfo').textContent = store.mode === 'firebase'
@@ -82,7 +82,7 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
 });
 
 // ================= 測定 =================
-const FIELDS = ['fCrew', 'fLocation', 'fTile', 'fLot', 'fMeasurer', 'fTileW', 'fTileH'];
+const FIELDS = ['fContractor', 'fCrew', 'fLocation', 'fTile', 'fLot', 'fMeasurer', 'fTileW', 'fTileH'];
 function parsePresets(txt) {
   return (txt || '').split('\n').map(l => l.split(/[,、，\t]/).map(s => s.trim())).filter(a => a.length >= 3 && +a[1] > 0 && +a[2] > 0)
     .map(a => ({ name: a[0], w: +a[1], h: +a[2] }));
@@ -112,8 +112,7 @@ function initForm() {
   const saved = LS.get('qcat.form', {});
   FIELDS.forEach(f => { $(f).value = saved[f] || ''; });
   if (!(+$('fTileW').value > 0 && +$('fTileH').value > 0)) { $('fTileW').value = settings.tileW; $('fTileH').value = settings.tileH; }
-  $('rDate').value = today();
-  $('xTo').value = today(); $('xFrom').value = today().slice(0, 8) + '01';
+  $('rFrom').value = today(); $('rTo').value = today();
   fillSettings(); fillPresets();
 }
 const rememberForm = () => LS.set('qcat.form', Object.fromEntries(FIELDS.map(f => [f, $(f).value])));
@@ -123,6 +122,42 @@ const optsNow = () => ({
   tileW: +$('fTileW').value || settings.tileW, tileH: +$('fTileH').value || settings.tileH, marginPct: settings.margin,
   thresholdPass: settings.pass, thresholdCaution: settings.caution, sensitivity: +$('sens').value,
 });
+
+// ---- 撮影日時（EXIF → なければファイルの更新日時 → なければ現在） ----
+function exifDate(buf) {
+  try {
+    const v = new DataView(buf);
+    if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return '';
+    let o = 2;
+    while (o + 4 < v.byteLength && v.getUint8(o) === 0xFF) {
+      const mk = v.getUint8(o + 1), len = v.getUint16(o + 2);
+      if (mk === 0xE1 && v.getUint32(o + 4) === 0x45786966) {
+        const t = o + 10, le = v.getUint16(t) === 0x4949;
+        const u16 = p => v.getUint16(t + p, le), u32 = p => v.getUint32(t + p, le);
+        const ascii = (p, n) => { let r = ''; for (let i = 0; i < n - 1; i++) r += String.fromCharCode(v.getUint8(t + p + i)); return r; };
+        const find = (ifd, tag) => { const c = u16(ifd); for (let i = 0; i < c; i++) { const e = ifd + 2 + i * 12; if (u16(e) === tag) return e; } return -1; };
+        const ifd0 = u32(4), cand = [], ex = find(ifd0, 0x8769);
+        if (ex >= 0) { const ei = u32(ex + 8); for (const tag of [0x9003, 0x9004]) { const e = find(ei, tag); if (e >= 0) cand.push(ascii(u32(e + 8), u32(e + 4))); } }
+        const e306 = find(ifd0, 0x0132); if (e306 >= 0) cand.push(ascii(u32(e306 + 8), u32(e306 + 4)));
+        for (const x of cand) { const m = /^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d)/.exec(x); if (m && m[1] !== '0000') return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`; }
+        return '';
+      }
+      o += 2 + len;
+    }
+  } catch { /* 取得できなければ空 */ }
+  return '';
+}
+const localDT = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+async function shotTimeOf(file) {
+  try { const x = exifDate(await file.slice(0, 262144).arrayBuffer()); if (x) return { v: x, src: '写真の撮影情報' }; } catch { /* 無視 */ }
+  if (file.lastModified) return { v: localDT(new Date(file.lastModified)), src: 'ファイルの日時（撮影情報なし）' };
+  return { v: localDT(new Date()), src: '現在時刻（撮影情報なし）' };
+}
+function applyShotTime(fillDateSession) {
+  const v = $('fShotAt').value; if (!v) return;
+  if (fillDateSession) { $('fDate').value = v.slice(0, 10); $('fSession').value = +v.slice(11, 13) < 12 ? 'AM' : 'PM'; }
+}
+$('fShotAt').onchange = () => { applyShotTime(true); $('shotMsg').textContent = '撮影日時を修正しました。施工日・時間帯も合わせて変更しています（必要なら手で直してください）。'; };
 
 async function loadFile(file) {
   if (!file) return;
@@ -136,6 +171,9 @@ async function loadFile(file) {
   URL.revokeObjectURL(url);
   S.photo = c; S.img = c.getContext('2d').getImageData(0, 0, w, h);
   S.photoBlob = await toBlob(c, 'image/jpeg', 0.88);
+  const st = await shotTimeOf(file);
+  $('fShotAt').value = st.v; applyShotTime(true);
+  $('shotMsg').textContent = `撮影日時：${st.v.replace('T', ' ')}（${st.src}）。施工日・時間帯をこの日時に合わせました。登録が後になっても、この撮影時刻が帳票に載ります。`;
   S.pts = []; S.res = null; S.final = null;
   $('resultPanel').hidden = true; $('sens').value = 0; $('sensVal').textContent = '0';
   $('pickerWrap').hidden = false;
@@ -305,7 +343,7 @@ $('saveBtn').onclick = async () => {
     const o = r.opts;
     const rec = {
       id: crypto.randomUUID(), date, session: $('fSession').value,
-      company: settings.company, site: settings.site, crew: $('fCrew').value.trim(),
+      company: settings.company, site: settings.site, contractor: $('fContractor').value.trim(), crew: $('fCrew').value.trim(),
       location: $('fLocation').value.trim(), tileModel: $('fTile').value.trim(),
       adhesiveLot: $('fLot').value.trim(), measurer: $('fMeasurer').value.trim(),
       fillPct: r.fillRounded, barePct: Math.round((100 - r.fillRounded) * 10) / 10,
@@ -314,7 +352,7 @@ $('saveBtn').onclick = async () => {
       imageSize: [S.img.width, S.img.height],
       tileW: o.tileW, tileH: o.tileH, marginPct: o.marginPct, sensitivity: o.sensitivity,
       autoThreshold: r.autoThreshold, thresholdPass: o.thresholdPass, thresholdCaution: o.thresholdCaution,
-      status: 'pending', createdAt: new Date().toISOString(), appVersion: APP_VERSION,
+      status: 'pending', createdAt: new Date().toISOString(), shotAt: $('fShotAt').value ? new Date($('fShotAt').value).toISOString() : new Date().toISOString(), appVersion: APP_VERSION,
     };
     const imgs = { photo: S.photoBlob, shot: await makeShot(), overlay: await toBlob($('cvOv'), 'image/jpeg', 0.88) };
     await Promise.race([store.save(rec, imgs), new Promise((_, rej) => setTimeout(() => rej({ code: 'timeout' }), 60000))]);
@@ -323,7 +361,7 @@ $('saveBtn').onclick = async () => {
     S.img = null; S.photo = null; S.pts = []; S.res = null; S.final = null;
     $('fRemarks').value = '';
     $('pickerWrap').hidden = true; $('resultPanel').hidden = true;
-    $('rDate').value = date; calMarks.clear();
+    $('rFrom').value = date; $('rTo').value = date; calAnchor = null; calMarks.clear();
     window.scrollTo(0, 0);
   } catch (e) {
     const c = e.code || e.message || '';
@@ -334,7 +372,7 @@ $('saveBtn').onclick = async () => {
   }
 };
 
-// ================= 日報（A4横の検査記録） =================
+// ================= 日報（A4横の検査記録・期間指定） =================
 function fitPaper() {
   const wrap = $('paperWrap'), paper = $('paper');
   if (!wrap || !paper || wrap.offsetParent === null) return;
@@ -345,30 +383,47 @@ function fitPaper() {
 }
 const finalCls = f => f === 'pass' ? 'ok' : f === 'fail' ? 'ng' : 'wn';
 const finalTxt = f => f ? RES[f] : '未確定';
+const shortDate = ymd => { const d = new Date(ymd + 'T00:00:00'); return `${d.getMonth() + 1}/${d.getDate()}(${'日月火水木金土'[d.getDay()]})`; };
+const rangeJp = (a, b) => a === b ? dateJp(a) : `${dateJp(a)} ～ ${dateJp(b)}`;
+const recTime = r => r.shotAt || r.createdAt;                       // 帳票の時刻＝撮影時刻（なければ登録時刻）
+const recSort = (a, b) => a.date.localeCompare(b.date) || recTime(a).localeCompare(recTime(b));
+const MAX_DAYS = 62;
 let currentRecs = [];
+const repRange = () => {
+  let a = $('rFrom').value || today(), b = $('rTo').value || a;
+  if (b < a) [a, b] = [b, a];
+  return [a, b];
+};
 
 // ---- 記録の有無が分かるカレンダー（記録のある日は日付の下に丸印、選択日は●白抜き文字） ----
 const calMarks = new Map();           // 'YYYY-MM' -> Map(date -> {n, fail})
 let calYM = null;                     // 表示中の月 {y, m}
+let calAnchor = null;                 // 期間指定の1回目のタップ
 const p2 = n => String(n).padStart(2, '0');
 async function drawCal(force) {
   const box = $('cal'); if (!box) return;
-  if (!calYM) { const [y, m] = ($('rDate').value || today()).split('-').map(Number); calYM = { y, m }; }
+  if (!calYM) { const [y, m] = repRange()[0].split('-').map(Number); calYM = { y, m }; }
   const { y, m } = calYM, key = `${y}-${p2(m)}`;
   const paint = () => {
-    const marks = calMarks.get(key) || new Map(), sel = $('rDate').value, td = today();
+    const marks = calMarks.get(key) || new Map(), [from, to] = repRange(), td = today();
     const first = new Date(y, m - 1, 1).getDay(), days = new Date(y, m, 0).getDate();
     let h = `<div class="calHead"><button type="button" id="calPrev" aria-label="前の月">‹</button><b>${y}年${m}月</b><button type="button" id="calNext" aria-label="次の月">›</button></div><div class="calGrid">`;
     '日月火水木金土'.split('').forEach((w, i) => { h += `<div class="calW${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</div>`; });
     for (let i = 0; i < first; i++) h += '<div></div>';
     for (let d = 1; d <= days; d++) {
       const ds = `${key}-${p2(d)}`, mk = marks.get(ds), dow = (first + d - 1) % 7;
-      h += `<button type="button" class="calD${ds === sel ? ' sel' : ''}${ds === td ? ' today' : ''}${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}" data-d="${ds}"><span class="n">${d}</span><span class="dot${mk ? (mk.fail ? ' ng' : ' on') : ''}"></span></button>`;
+      const edge = ds === from || ds === to, mid = ds > from && ds < to;
+      h += `<button type="button" class="calD${edge ? ' sel' : ''}${mid ? ' mid' : ''}${ds === td ? ' today' : ''}${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}" data-d="${ds}"><span class="n">${d}</span><span class="dot${mk ? (mk.fail ? ' ng' : ' on') : ''}"></span></button>`;
     }
     box.innerHTML = h + '</div>';
     $('calPrev').onclick = () => { calYM = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 }; drawCal(); };
     $('calNext').onclick = () => { calYM = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 }; drawCal(); };
-    box.querySelectorAll('.calD').forEach(b => b.onclick = () => { $('rDate').value = b.dataset.d; loadReport(); });
+    box.querySelectorAll('.calD').forEach(b => b.onclick = () => {
+      const ds = b.dataset.d;
+      if (calAnchor) { const [a, c] = ds < calAnchor ? [ds, calAnchor] : [calAnchor, ds]; $('rFrom').value = a; $('rTo').value = c; calAnchor = null; }
+      else { $('rFrom').value = ds; $('rTo').value = ds; calAnchor = ds; }
+      loadReport(true);
+    });
   };
   paint();
   if (force || !calMarks.has(key)) {
@@ -382,10 +437,14 @@ async function drawCal(force) {
   }
 }
 
-async function loadReport() {
-  const d = $('rDate').value || today();
-  { const [y, m] = d.split('-').map(Number); calYM = { y, m }; drawCal(); }
-  try { currentRecs = await store.list(d, d); }
+async function loadReport(keepMonth) {
+  let [from, to] = repRange();
+  $('rFrom').value = from; $('rTo').value = to;
+  if (keepMonth !== true) { const [y, m] = from.split('-').map(Number); calYM = { y, m }; }
+  drawCal();
+  const days = (new Date(to) - new Date(from)) / 864e5 + 1;
+  if (days > MAX_DAYS) { $('paper').innerHTML = `<div class="emptyRow">期間は最大${MAX_DAYS}日までです（現在${days}日）。期間を短くしてください。</div>`; fitPaper(); $('rowActions').hidden = true; return; }
+  try { currentRecs = (await store.list(from, to)).sort(recSort); }
   catch (e) { $('paper').innerHTML = `<div class="emptyRow">読み込みに失敗しました：${esc(e.code || e.message)}</div>`; fitPaper(); return; }
   const valid = currentRecs.filter(r => r.status !== 'retake');
   const invalid = currentRecs.filter(r => r.status === 'retake');
@@ -400,15 +459,16 @@ async function loadReport() {
 
   const logo = settings.logo ? `<img src="${esc(settings.logo)}" alt="">` : 'ロゴ';
   const rows = valid.map((r, i) => `<tr data-id="${esc(r.id)}">
-      <td>${i + 1}</td><td>${SESS[r.session]}</td><td>${esc(hhmm(r.createdAt))}</td><td>${esc(r.crew)}</td><td>${esc(r.location)}</td><td>${esc(r.tileModel)}</td>
+      <td>${i + 1}</td><td>${esc(shortDate(r.date))}</td><td>${SESS[r.session]}</td><td>${esc(r.contractor)}</td><td>${esc(r.crew)}</td><td>${esc(r.location)}</td><td>${esc(hhmm(recTime(r)))}</td><td>${esc(r.tileModel)}</td>
       <td class="pct">${Number(r.fillPct).toFixed(1)}%</td>
       <td class="${r.result === 'pass' ? 'ok' : r.result === 'fail' ? 'ng' : 'wn'}">${RES[r.result]}</td>
       <td class="${finalCls(r.finalResult)}">${finalTxt(r.finalResult)}</td>
       <td>${esc(r.measurer)}</td>
       <td><img data-k="shot" alt="検査写真"></td><td><img data-k="overlay" alt="解析結果"></td>
       <td class="rm">${esc(r.remarks)}</td></tr>`).join('');
-  const base = '※接着率は、タイル裏面の撮影画像から接着剤が付着している面積の割合を画像解析で算出した値です。最終判定は検査者が写真で確認のうえ確定しています。';
+  const base = '※接着率は、タイル裏面の撮影画像から接着剤が付着している面積の割合を画像解析で算出した値です。最終判定は検査者が写真で確認のうえ確定しています。時刻は写真の撮影時刻です。';
   const first = valid[0] || {};
+  const W = [3.5, 6.5, 4.5, 7, 5.5, 9.5, 5, 5.5, 5.5, 5.5, 5.5, 5, 11, 11, 9.5];
   $('paper').innerHTML = `
     <div class="ph">
       <div class="phl"><div class="logo">${logo}</div>
@@ -416,16 +476,16 @@ async function loadReport() {
           <div class="ttl">外装タイル 有機系接着剤 充填率検査記録（Q-CAT）</div>
           <div>${esc(settings.company || '（会社名・工事所名）')}</div>
           <div>工事名：${esc(settings.site)}</div>
-          <div>施工日：${esc(dateJp(d))}　合格基準：接着率 ${first.thresholdPass ?? settings.pass}% 以上</div>
-          <div>検査件数：午前 ${n('AM')}件 / 午後 ${n('PM')}件　総合：${overall}</div>
+          <div>施工日：${esc(rangeJp(from, to))}　合格基準：接着率 ${first.thresholdPass ?? settings.pass}% 以上</div>
+          <div>検査件数：計 ${valid.length}件（午前 ${n('AM')}件 / 午後 ${n('PM')}件）　総合：${overall}</div>
         </div></div>
       <table class="sign"><tr><th>検査者</th><th>確認者</th><th>主任者</th></tr><tr><td></td><td></td><td></td></tr></table>
     </div>
     <table class="sheet">
-      <colgroup><col style="width:4%"><col style="width:5%"><col style="width:6.5%"><col style="width:5%"><col style="width:11%"><col style="width:5.5%"><col style="width:7%"><col style="width:6.5%"><col style="width:6.5%"><col style="width:5.5%"><col style="width:13%"><col style="width:13%"><col style="width:11.5%"></colgroup>
-      <thead><tr><th>No.</th><th>時間帯</th><th>検査時刻</th><th>張り手</th><th>施工箇所</th><th>タイル</th><th>接着率</th><th>自動判定</th><th>最終判定</th><th>検査者</th><th>検査写真</th><th>解析結果</th><th>備考</th></tr></thead>
+      <colgroup>${W.map(w => `<col style="width:${w}%">`).join('')}</colgroup>
+      <thead><tr><th>No.</th><th>施工日</th><th>時間帯</th><th>施工会社</th><th>施工者</th><th>施工箇所</th><th>撮影時刻</th><th>タイル</th><th>接着率</th><th>自動判定</th><th>最終判定</th><th>検査者</th><th>検査写真</th><th>解析結果</th><th>備考</th></tr></thead>
       <tbody>${rows}</tbody></table>
-    ${valid.length ? '' : '<div class="emptyRow">この日の検査記録はありません</div>'}
+    ${valid.length ? '' : '<div class="emptyRow">この期間の検査記録はありません</div>'}
     <div class="foot">${esc(base)}${invalid.length ? `無効（再測定）${invalid.length}件は集計から除外しています。` : ''}${esc(settings.footNote)}</div>`;
   $('paper').querySelectorAll('tr[data-id]').forEach(tr => {
     const rec = valid.find(x => x.id === tr.dataset.id);
@@ -435,18 +495,27 @@ async function loadReport() {
     });
   });
   fitPaper();
-  renderRowActions(valid, invalid);
+  renderRowActions(currentRecs);
 }
 
-function renderRowActions(valid, invalid) {
+// ---- 記録の管理（無効化・削除） ----
+const canDelete = r => store.user && (store.user.isAdmin || r.createdBy === store.user.uid);
+function renderRowActions(recs) {
   const box = $('rowActions');
-  const admin = store.user && store.user.isAdmin;
-  box.hidden = !(admin && (valid.length || invalid.length));
+  const mine = recs.filter(r => canDelete(r) || (store.user && store.user.isAdmin));
+  box.hidden = !mine.length;
   if (box.hidden) return;
-  box.innerHTML = `<h3>記録の無効化（管理者）</h3><div class="hint">誤撮影や再測定の場合に無効にします。記録は削除されず、帳票の集計から除外されます。</div>
-    ${valid.map((r, i) => `<div class="ra"><span>No.${i + 1}　${SESS[r.session]} ${esc(hhmm(r.createdAt))}　${esc(r.location) || '－'}　${Number(r.fillPct).toFixed(1)}%</span><button data-id="${esc(r.id)}">無効にする</button></div>`).join('')}
-    ${invalid.map(r => `<div class="ra"><small>無効：${SESS[r.session]} ${esc(hhmm(r.createdAt))}　${Number(r.fillPct).toFixed(1)}%　理由：${esc(r.reviewComment || '')}</small></div>`).join('')}`;
-  box.querySelectorAll('button[data-id]').forEach(b => b.onclick = () => invalidate(valid.find(x => x.id === b.dataset.id)));
+  const admin = store.user && store.user.isAdmin;
+  let no = 0;
+  box.innerHTML = `<h3>記録の管理</h3>
+    <div class="hint">${admin ? '管理者は全記録の「無効化」「削除」ができます。' : '自分が登録した記録を削除できます。'}削除すると写真も消え、元に戻せません（削除の履歴は残ります）。</div>
+    ${mine.map(r => { const valid = r.status !== 'retake'; if (valid) no++;
+      return `<div class="ra"><span>${valid ? 'No.' + no : '<small>無効</small>'}　${esc(shortDate(r.date))} ${SESS[r.session]} ${esc(hhmm(recTime(r)))}　${esc(r.location) || '－'}　${Number(r.fillPct).toFixed(1)}%${valid ? '' : `<br><small>理由：${esc(r.reviewComment || '')}</small>`}</span>
+      <span class="raBtns">${admin && valid ? `<button data-act="inv" data-id="${esc(r.id)}">無効化</button>` : ''}${canDelete(r) ? `<button class="danger" data-act="del" data-id="${esc(r.id)}">削除</button>` : ''}</span></div>`; }).join('')}`;
+  box.querySelectorAll('button[data-id]').forEach(b => b.onclick = () => {
+    const rec = recs.find(x => x.id === b.dataset.id);
+    return b.dataset.act === 'del' ? removeRec(rec) : invalidate(rec);
+  });
 }
 async function invalidate(rec) {
   const comment = await askComment('無効にする理由（必須）', true);
@@ -456,47 +525,24 @@ async function invalidate(rec) {
     toast('無効にしました'); calMarks.clear(); loadReport();
   } catch (e) { toast('更新に失敗しました：' + (e.code || e.message), 5000); }
 }
+async function removeRec(rec) {
+  const comment = await askComment(`この記録を削除します（${shortDate(rec.date)} ${SESS[rec.session]} ${rec.location || ''} ${Number(rec.fillPct).toFixed(1)}%）。写真も消え、元に戻せません。削除する理由（必須）`, true);
+  if (comment === null) return;
+  try {
+    await store.remove(rec, comment);
+    toast('削除しました'); calMarks.clear(); loadReport();
+  } catch (e) { toast('削除に失敗しました：' + (e.code || e.message), 6000); }
+}
 $('rReload').onclick = () => { calMarks.clear(); loadReport(); };
-$('rDate').onchange = loadReport;
+$('rFrom').onchange = () => { calAnchor = null; if ($('rTo').value < $('rFrom').value) $('rTo').value = $('rFrom').value; loadReport(); };
+$('rTo').onchange = () => { calAnchor = null; loadReport(); };
+$('rToday').onclick = () => { $('rFrom').value = $('rTo').value = today(); calAnchor = null; loadReport(); };
+$('rMonth').onclick = () => { const t = today(); $('rFrom').value = t.slice(0, 8) + '01'; $('rTo').value = t.slice(0, 8) + p2(new Date(+t.slice(0, 4), +t.slice(5, 7), 0).getDate()); calAnchor = null; loadReport(); };
 $('rPrint').onclick = async () => {
   await loadReport();
   const imgs = [...document.querySelectorAll('#paper img')];
-  await Promise.all(imgs.map(i => i.complete && i.src ? 1 : new Promise(r => { i.onload = i.onerror = r; setTimeout(r, 4000); })));
+  await Promise.all(imgs.map(i => i.complete && i.src ? 1 : new Promise(r => { i.onload = i.onerror = r; setTimeout(r, 8000); })));
   window.print();
-};
-
-// ---- Excel出力 ----
-function loadScript(src) {
-  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-}
-$('xBtn').onclick = async () => {
-  const from = $('xFrom').value, to = $('xTo').value;
-  if (!from || !to || from > to) { toast('期間を正しく指定してください'); return; }
-  let recs;
-  try { recs = await store.list(from, to); } catch (e) { toast('取得に失敗しました：' + (e.code || e.message)); return; }
-  if (!recs.length) { toast('この期間の記録がありません'); return; }
-  const head = ['施工日', 'No.', '時間帯', '検査時刻', '張り手', '施工箇所', 'タイル', '接着率(%)', '自動判定', '最終判定', '検査者', '備考',
-    '工事名', '接着剤ロット', '合格基準(%)', '要確認上限(%)', '外周除外(%)', '感度', '自動閾値', '四隅座標(px)', '画像サイズ(px)', '記録状態', '無効の理由'];
-  const perDay = {};
-  const rows = recs.map(r => {
-    const valid = r.status !== 'retake';
-    const no = valid ? (perDay[r.date] = (perDay[r.date] || 0) + 1) : '';
-    return [r.date, no, SESS[r.session], hhmm(r.createdAt), r.crew || '', r.location, r.tileModel, r.fillPct, RES[r.result], r.finalResult ? RES[r.finalResult] : '未確定', r.measurer, r.remarks || '',
-      r.site || '', r.adhesiveLot, r.thresholdPass, r.thresholdCaution, r.marginPct, r.sensitivity, r.autoThreshold, JSON.stringify(r.corners), (r.imageSize || []).join('×'),
-      valid ? '有効' : '無効（再測定）', r.reviewComment || ''];
-  });
-  const name = `充填率検査記録_${from}_${to}`;
-  try {
-    await loadScript('vendor/xlsx.full.min.js');
-    const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
-    ws['!cols'] = head.map((h, i) => ({ wch: i === 19 ? 40 : i === 5 || i === 11 ? 22 : Math.max(8, h.length * 2) }));
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, '検査記録');
-    XLSX.writeFile(wb, name + '.xlsx');
-  } catch {
-    const csv = '﻿' + [head, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = name + '.csv'; a.click();
-    toast('Excelライブラリを読み込めなかったためCSVで出力しました');
-  }
 };
 
 // ================= 設定 =================

@@ -70,6 +70,13 @@ class LocalStore {
     if (!blob) return '';
     const u = URL.createObjectURL(blob); this.urls.set(key, u); return u;
   }
+  async remove(rec) {
+    await this._tx(['measurements', 'blobs'], 'readwrite', tx => {
+      ['photo', 'shot', 'overlay'].forEach(k => tx.objectStore('blobs').delete(rec.id + '/' + k));
+      tx.objectStore('measurements').delete(rec.id);
+    });
+    ['photo', 'shot', 'overlay'].forEach(k => { const u = this.urls.get(rec.id + '/' + k); if (u) { URL.revokeObjectURL(u); this.urls.delete(rec.id + '/' + k); } });
+  }
   async review(id, patch) {
     await this._tx(['measurements'], 'readwrite', tx => {
       const s = tx.objectStore('measurements'), g = s.get(id);
@@ -140,6 +147,18 @@ class FirebaseStore {
       u = await this.m.getDownloadURL(this.m.ref(this.st, path));
     }
     this.urls.set(key, u); return u;
+  }
+  // 削除：先に削除履歴(deletions)を残してから、画像と記録を消す
+  async remove(rec, reason) {
+    const { doc, setDoc, deleteDoc } = this.m;
+    await setDoc(doc(this.fs, 'deletions', crypto.randomUUID()), JSON.parse(JSON.stringify({
+      recordId: rec.id, date: rec.date, session: rec.session, location: rec.location || '', fillPct: rec.fillPct, finalResult: rec.finalResult || null,
+      measurer: rec.measurer || '', createdBy: rec.createdBy || '', createdByEmail: rec.createdByEmail || '', shotAt: rec.shotAt || null,
+      reason, deletedBy: this.user.uid, deletedByEmail: this.user.email, deletedAt: new Date().toISOString(),
+    })));
+    if (rec.imgMode === 'fs') for (const k of ['photo', 'shot', 'overlay']) await deleteDoc(doc(this.fs, 'measurements', rec.id, 'images', k));
+    await deleteDoc(doc(this.fs, 'measurements', rec.id));
+    ['photo', 'shot', 'overlay'].forEach(k => this.urls.delete(rec.id + '/' + k));
   }
   async review(id, patch) {
     await this.m.updateDoc(this.m.doc(this.fs, 'measurements', id), patch);
