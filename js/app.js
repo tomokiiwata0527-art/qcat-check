@@ -316,16 +316,18 @@ $('saveBtn').onclick = async () => {
       status: 'pending', createdAt: new Date().toISOString(), appVersion: '0.2.0',
     };
     const imgs = { photo: S.photoBlob, shot: await makeShot(), overlay: await toBlob($('cvOv'), 'image/jpeg', 0.88) };
-    await store.save(rec, imgs);
+    await Promise.race([store.save(rec, imgs), new Promise((_, rej) => setTimeout(() => rej({ code: 'timeout' }), 60000))]);
     rememberForm();
     toast('保存しました（日報タブで確認できます）');
     S.img = null; S.photo = null; S.pts = []; S.res = null; S.final = null;
     $('fRemarks').value = '';
     $('pickerWrap').hidden = true; $('resultPanel').hidden = true;
-    $('rDate').value = date;
+    $('rDate').value = date; calMarks.clear();
     window.scrollTo(0, 0);
   } catch (e) {
-    toast('保存に失敗しました：' + (e.code || e.message), 5000);
+    const c = e.code || e.message || '';
+    const hint = /storage\/(unauthorized|retry-limit|unknown|bucket)|timeout/.test(c) ? '（写真の送信に失敗。Storageの設定・ルールを確認してください）' : /permission-denied/.test(c) ? '（Firestoreのルール未公開の可能性）' : '';
+    toast('保存に失敗しました：' + c + hint, 8000);
   } finally {
     S.saving = false; $('saveBtn').disabled = false; $('saveBtn').textContent = 'この結果を保存';
   }
@@ -344,8 +346,44 @@ const finalCls = f => f === 'pass' ? 'ok' : f === 'fail' ? 'ng' : 'wn';
 const finalTxt = f => f ? RES[f] : '未確定';
 let currentRecs = [];
 
+// ---- 記録の有無が分かるカレンダー（記録のある日は日付の下に丸印、選択日は●白抜き文字） ----
+const calMarks = new Map();           // 'YYYY-MM' -> Map(date -> {n, fail})
+let calYM = null;                     // 表示中の月 {y, m}
+const p2 = n => String(n).padStart(2, '0');
+async function drawCal(force) {
+  const box = $('cal'); if (!box) return;
+  if (!calYM) { const [y, m] = ($('rDate').value || today()).split('-').map(Number); calYM = { y, m }; }
+  const { y, m } = calYM, key = `${y}-${p2(m)}`;
+  const paint = () => {
+    const marks = calMarks.get(key) || new Map(), sel = $('rDate').value, td = today();
+    const first = new Date(y, m - 1, 1).getDay(), days = new Date(y, m, 0).getDate();
+    let h = `<div class="calHead"><button type="button" id="calPrev" aria-label="前の月">‹</button><b>${y}年${m}月</b><button type="button" id="calNext" aria-label="次の月">›</button></div><div class="calGrid">`;
+    '日月火水木金土'.split('').forEach((w, i) => { h += `<div class="calW${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</div>`; });
+    for (let i = 0; i < first; i++) h += '<div></div>';
+    for (let d = 1; d <= days; d++) {
+      const ds = `${key}-${p2(d)}`, mk = marks.get(ds), dow = (first + d - 1) % 7;
+      h += `<button type="button" class="calD${ds === sel ? ' sel' : ''}${ds === td ? ' today' : ''}${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}" data-d="${ds}"><span class="n">${d}</span><span class="dot${mk ? (mk.fail ? ' ng' : ' on') : ''}"></span></button>`;
+    }
+    box.innerHTML = h + '</div>';
+    $('calPrev').onclick = () => { calYM = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 }; drawCal(); };
+    $('calNext').onclick = () => { calYM = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 }; drawCal(); };
+    box.querySelectorAll('.calD').forEach(b => b.onclick = () => { $('rDate').value = b.dataset.d; loadReport(); });
+  };
+  paint();
+  if (force || !calMarks.has(key)) {
+    try {
+      const recs = await store.list(`${key}-01`, `${key}-31`), mp = new Map();
+      recs.filter(r => r.status !== 'retake').forEach(r => {
+        const o = mp.get(r.date) || { n: 0, fail: false }; o.n++; if (r.finalResult === 'fail') o.fail = true; mp.set(r.date, o);
+      });
+      calMarks.set(key, mp); paint();
+    } catch { /* 読み込み失敗は日報側のメッセージに任せる */ }
+  }
+}
+
 async function loadReport() {
   const d = $('rDate').value || today();
+  { const [y, m] = d.split('-').map(Number); calYM = { y, m }; drawCal(); }
   try { currentRecs = await store.list(d, d); }
   catch (e) { $('paper').innerHTML = `<div class="emptyRow">読み込みに失敗しました：${esc(e.code || e.message)}</div>`; fitPaper(); return; }
   const valid = currentRecs.filter(r => r.status !== 'retake');
@@ -414,10 +452,10 @@ async function invalidate(rec) {
   if (comment === null) return;
   try {
     await store.review(rec.id, { status: 'retake', reviewComment: comment, reviewedBy: store.mode === 'local' ? 'この端末' : store.user.email, reviewedAt: new Date().toISOString() });
-    toast('無効にしました'); loadReport();
+    toast('無効にしました'); calMarks.clear(); loadReport();
   } catch (e) { toast('更新に失敗しました：' + (e.code || e.message), 5000); }
 }
-$('rReload').onclick = loadReport;
+$('rReload').onclick = () => { calMarks.clear(); loadReport(); };
 $('rDate').onchange = loadReport;
 $('rPrint').onclick = async () => {
   await loadReport();
