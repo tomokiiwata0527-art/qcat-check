@@ -119,7 +119,7 @@ class FirebaseStore {
       overlay: await shrinkToDataUrl(imgs.overlay, 1056),
     };
     for (const k of ['photo', 'shot', 'overlay']) await setDoc(doc(this.fs, 'measurements', rec.id, 'images', k), { data: data[k] });
-    await setDoc(doc(this.fs, 'measurements', rec.id), rec);
+    await setDoc(doc(this.fs, 'measurements', rec.id), JSON.parse(JSON.stringify(rec)));   // undefinedを除去
     this.urls.set(rec.id + '/photo', data.photo); this.urls.set(rec.id + '/shot', data.shot); this.urls.set(rec.id + '/overlay', data.overlay);
     return rec;
   }

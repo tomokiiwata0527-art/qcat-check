@@ -309,7 +309,7 @@ $('saveBtn').onclick = async () => {
       adhesiveLot: $('fLot').value.trim(), measurer: $('fMeasurer').value.trim(),
       fillPct: r.fillRounded, barePct: Math.round((100 - r.fillRounded) * 10) / 10,
       result: r.result, finalResult: S.final, remarks,
-      corners: S.pts.map(p => [Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10]),
+      corners: S.pts.map(p => ({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 })),  // Firestoreは配列の入れ子不可のため {x,y}
       imageSize: [S.img.width, S.img.height],
       tileW: o.tileW, tileH: o.tileH, marginPct: o.marginPct, sensitivity: o.sensitivity,
       autoThreshold: r.autoThreshold, thresholdPass: o.thresholdPass, thresholdCaution: o.thresholdCaution,
