@@ -4,6 +4,20 @@
 //   list(from, to), imageUrl(rec, 'photo'|'overlay'), review(id, patch)
 import { firebaseConfig } from './firebase-config.js';
 
+// 画像を縮小してJPEGのdataURLにする（Firestore 1ドキュメント1MiB制限に収めるため）
+export async function shrinkToDataUrl(blob, maxLong, maxChars = 900000) {
+  const bmp = await createImageBitmap(blob);
+  let long = maxLong;
+  for (let i = 0; i < 6; i++) {
+    const k = Math.min(1, long / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    for (const q of [0.8, 0.7, 0.6, 0.5]) { const u = c.toDataURL('image/jpeg', q); if (u.length <= maxChars) return u; }
+    long = Math.round(long * 0.8);
+  }
+  throw Object.assign(new Error('image-too-large'), { code: 'image-too-large' });
+}
+
 const FB = 'https://www.gstatic.com/firebasejs/10.14.1/';
 
 // ---------------- 端末内保存 ----------------
@@ -94,14 +108,19 @@ class FirebaseStore {
     await this._setUser(c.user); return this.user;
   }
   async signOut() { await this.m.signOut(this.auth); this.user = null; }
+  // Storage（有料のBlazeプランが必要）を使わず、縮小した画像をFirestoreに保存する
   async save(rec, imgs) {
-    const { ref, uploadBytes, doc, setDoc } = this.m;
+    const { doc, setDoc, writeBatch } = this.m;
     rec.createdBy = this.user.uid; rec.createdByEmail = this.user.email;
-    rec.photoPath = `measurements/${rec.id}/photo.jpg`; rec.shotPath = `measurements/${rec.id}/shot.jpg`; rec.overlayPath = `measurements/${rec.id}/overlay.jpg`;
-    await uploadBytes(ref(this.st, rec.photoPath), imgs.photo, { contentType: 'image/jpeg' });
-    await uploadBytes(ref(this.st, rec.shotPath), imgs.shot, { contentType: 'image/jpeg' });
-    await uploadBytes(ref(this.st, rec.overlayPath), imgs.overlay, { contentType: 'image/jpeg' });
+    rec.imgMode = 'fs';
+    const data = {
+      photo: await shrinkToDataUrl(imgs.photo, 1280),
+      shot: await shrinkToDataUrl(imgs.shot, 900),
+      overlay: await shrinkToDataUrl(imgs.overlay, 1056),
+    };
+    for (const k of ['photo', 'shot', 'overlay']) await setDoc(doc(this.fs, 'measurements', rec.id, 'images', k), { data: data[k] });
     await setDoc(doc(this.fs, 'measurements', rec.id), rec);
+    this.urls.set(rec.id + '/photo', data.photo); this.urls.set(rec.id + '/shot', data.shot); this.urls.set(rec.id + '/overlay', data.overlay);
     return rec;
   }
   async list(from, to) {
@@ -111,10 +130,18 @@ class FirebaseStore {
     return snap.docs.map(d => d.data()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
   async imageUrl(rec, kind) {
-    const path = { photo: rec.photoPath, shot: rec.shotPath, overlay: rec.overlayPath }[kind];
-    if (!path) return '';
-    if (this.urls.has(path)) return this.urls.get(path);
-    const u = await this.m.getDownloadURL(this.m.ref(this.st, path)); this.urls.set(path, u); return u;
+    const key = rec.id + '/' + kind;
+    if (this.urls.has(key)) return this.urls.get(key);
+    let u = '';
+    if (rec.imgMode === 'fs') {
+      const d = await this.m.getDoc(this.m.doc(this.fs, 'measurements', rec.id, 'images', kind));
+      u = d.exists() ? d.data().data : '';
+    } else {
+      const path = { photo: rec.photoPath, shot: rec.shotPath, overlay: rec.overlayPath }[kind];
+      if (!path) return '';
+      u = await this.m.getDownloadURL(this.m.ref(this.st, path));
+    }
+    this.urls.set(key, u); return u;
   }
   async review(id, patch) {
     await this.m.updateDoc(this.m.doc(this.fs, 'measurements', id), patch);
